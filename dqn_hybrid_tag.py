@@ -44,38 +44,123 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
                 env.render()
 
             # act
-            actions = []
+            actions = np.zeros(env.n)
             actions_onehot = []
+            #the action is selected by the JAL deep Q network
+            action = dqns[0].choose_action(states[0])
+            speed = 0.9 
+            
+            #distribute actions to two players
+            if action == 0:
+                actions[0]=0
+                actions[1]=0
+            elif action == 1:
+                actions[0]=0
+                actions[1]=1
+            elif action == 2:
+                actions[0]=0
+                actions[1]=2
+            elif action == 3:
+                actions[0]=0
+                actions[1]=3
+            elif action == 4:
+                actions[0]=0
+                actions[1]=4
+                
+            elif action == 5:
+                actions[0]=1
+                actions[1]=0
+            elif action == 6:
+                actions[0]=1
+                actions[1]=1
+            elif action == 7:
+                actions[0]=1
+                actions[1]=2
+            elif action == 8:
+                actions[0]=1
+                actions[1]=3
+            elif action == 9:
+                actions[0]=1
+                actions[1]=4
+                
+            elif action == 10:
+                actions[0]=2
+                actions[1]=0
+            elif action == 11:
+                actions[0]=2
+                actions[1]=1
+            elif action == 12:
+                actions[0]=2
+                actions[1]=2
+            elif action == 13:
+                actions[0]=2
+                actions[1]=3
+            elif action == 14:
+                actions[0]=2
+                actions[1]=4
+                
+            elif action == 15:
+                actions[0]=3
+                actions[1]=0
+            elif action == 16:
+                actions[0]=3
+                actions[1]=1
+            elif action == 17:
+                actions[0]=3
+                actions[1]=2
+            elif action == 18:
+                actions[0]=3
+                actions[1]=3
+            elif action == 19:
+                actions[0]=3
+                actions[1]=4
+                
+            elif action == 20:
+                actions[0]=4
+                actions[1]=0
+            elif action == 21:
+                actions[0]=4
+                actions[1]=1
+            elif action == 22:
+                actions[0]=4
+                actions[1]=2
+            elif action == 23:
+                actions[0]=4
+                actions[1]=3
+            elif action == 24:
+                actions[0]=4
+                actions[1]=4
+                
+            actions=actions.astype(int)
             for i in range(env.n):
-                action = dqns[i].choose_action(states[i])
-                speed = 0.9 
-
-                onehot_action = np.zeros(n_actions[i])
-                onehot_action[action] = speed
+                onehot_action = np.zeros(n_actions)
+                onehot_action[actions[i]] = speed
                 actions_onehot.append(onehot_action)
-                actions.append(action)
 
             # step
             states_next, rewards, done, info = env.step(actions_onehot)
+            
+            reward_cal=rewards[0]+rewards[1];
 
             # learn
             if not args.testing:
-                size = memories[0].pointer
+                size = memories.pointer
                 batch = random.sample(range(size), size) if size < batch_size else random.sample(
                     range(size), batch_size)
+                
+                done_cal=np.logical_and(done[0],done[1])
+                memories.remember(states[0], action,
+                                     reward_cal, states_next[0], done_cal)
+                memories2.remember(states[0], actions[0],
+                                     reward_cal, states_next[0], done_cal)
 
-                for i in range(env.n):
-                    if done[i]:
-                        rewards[i] -= 50
-
-                    memories[i].remember(states[i], actions[i],
-                                         rewards[i], states_next[i], done[i])
-
-                    if memories[i].pointer > batch_size * 10:
-                        history = dqns[i].learn(*memories[i].sample(batch))
-                        episode_losses[i] += history.history["loss"][0]
-                    else:
-                        episode_losses[i] = -1
+                if memories.pointer > batch_size * 10:
+                    history = dqns[0].learn(*memories.sample(batch))
+                    dqns[1].learn (*memories2.sample(batch))
+                    episode_losses[0] += history.history["loss"][0]
+                else:
+                    episode_losses[0] = -1
+                    
 
             states = states_next
             episode_rewards += rewards
@@ -91,7 +176,7 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
                 statistic.append(steps)
                 statistic.extend([episode_rewards[i] for i in range(env.n)])
                 statistic.extend([episode_losses[i] for i in range(env.n)])
-                statistic.extend([dqns[i].eps_greedy for i in range(env.n)])
+                statistic.extend([dqns[0].eps_greedy for i in range(env.n)])
                 statistic.extend(collision_count.tolist())
                 statistics.add_statistics(statistic)
                 if episode % 25 == 0:
@@ -101,11 +186,11 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
         if episode % checkpoint_interval == 0:
             statistics.dump("{}_{}.csv".format(csv_filename_prefix,
                                                episode))
-            general_utilities.save_dqn_weights(dqns,
-                                               "{}_{}_".format(weights_filename_prefix, episode))
-            if episode >= checkpoint_interval:
-                os.remove("{}_{}.csv".format(csv_filename_prefix,
-                                             episode - checkpoint_interval))
+            #general_utilities.save_dqn_weights(dqn,
+           #                                    "{}_{}_".format(weights_filename_prefix, episode))
+            #if episode >= checkpoint_interval:
+              #  os.remove("{}_{}.csv".format(csv_filename_prefix,
+              #                               episode - checkpoint_interval))
 
     return statistics
 
@@ -130,7 +215,7 @@ if __name__ == '__main__':
                         help="reduces exploration substantially")
     parser.add_argument('--random_seed', default=2, type=int)
     parser.add_argument('--memory_size', default=10000, type=int)
-    parser.add_argument('--batch_size', default=10, type=int)
+    parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--epsilon_greedy', nargs='+', type=float,
                         help="Epsilon greedy parameter for each agent")
     args = parser.parse_args()
@@ -139,6 +224,7 @@ if __name__ == '__main__':
                                         args.experiment_prefix + "/save/run_parameters.json")
     # init env
     env = make_env(args.env, args.benchmark)
+    
 
     if args.epsilon_greedy is not None:
         if len(args.epsilon_greedy) == env.n:
@@ -154,15 +240,22 @@ if __name__ == '__main__':
     np.random.seed(args.random_seed)
     tf.set_random_seed(args.random_seed)
 
-    # init DQNs
-    n_actions = [env.action_space[i].n for i in range(env.n)]
-    state_sizes = [env.observation_space[i].shape[0] for i in range(env.n)]
-    memories = [Memory(args.memory_size) for i in range(env.n)]
-    dqns = [DQN(n_actions[i], state_sizes[i], eps_greedy=epsilon_greedy[i])
-            for i in range(env.n)]
-
+    # init DQN for JAL learner
+    n_actions = env.action_space[0].n
+    state_sizes = env.observation_space[0].shape[0]
+    memories = Memory(args.memory_size)
+    memories2 = Memory(args.memory_size)
+    
+    dqns=[]
+    #to implement JAL, the action space becomes a1b1, a1b2, a1b3, ..., a5b4, a5b5
+    dqns.append( DQN(n_actions*n_actions, state_sizes, eps_greedy=epsilon_greedy[0]))
+    #DQN for independent learner
+    dqns.append( DQN(n_actions, state_sizes, eps_greedy=epsilon_greedy[0]))
+    
     #general_utilities.load_dqn_weights_if_exist(
     #    dqns, args.experiment_prefix + args.weights_filename_prefix)
+    
+    
 
     start_time = time.time()
 

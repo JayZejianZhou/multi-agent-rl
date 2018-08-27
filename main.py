@@ -72,7 +72,7 @@ def fill_memory(options, env, memories):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', default='simple_tag', type=str)
+    parser.add_argument('--env', default='simple_tag_guided', type=str)
     parser.add_argument('--folder', default='', type=str)
     parser.add_argument('--gamma', default=.9, type=float)
     parser.add_argument('--learning_rate', default=1e-3, type=float)

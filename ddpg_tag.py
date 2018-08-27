@@ -122,12 +122,12 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', default='simple_tag_guided', type=str)
+    parser.add_argument('--env', default='algo_design', type=str)
     parser.add_argument('--video_dir', default='videos/', type=str)
     parser.add_argument('--learning_rate', default=0.001, type=float)
-    parser.add_argument('--episodes', default=100000, type=int)
+    parser.add_argument('--episodes', default=2000, type=int)
     parser.add_argument('--video_interval', default=1000, type=int)
-    parser.add_argument('--render', default=False, action="store_true")
+    parser.add_argument('--render', default=True, action="store_true")
     parser.add_argument('--benchmark', default=False, action="store_true")
     parser.add_argument('--experiment_prefix', default=".",
                         help="directory to store all experiment data")

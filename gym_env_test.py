@@ -13,7 +13,7 @@ from dqn import DQN
 from memory import Memory
 from make_env import make_env
 import general_utilities
-import new_alg_utilities
+import simple_tag_utilities
 
 
 def play(episodes, is_render, is_testing, checkpoint_interval,
@@ -48,7 +48,7 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
             actions_onehot = []
             for i in range(env.n):
                 action = dqns[i].choose_action(states[i])
-                speed = 0.9 
+                speed = 0.9 if env.agents[i].adversary else 1
 
                 onehot_action = np.zeros(n_actions[i])
                 onehot_action[action] = speed
@@ -80,7 +80,7 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
             states = states_next
             episode_rewards += rewards
             collision_count += np.array(
-                new_alg_utilities.count_agent_collisions(env))
+                simple_tag_utilities.count_agent_collisions(env))
 
             # reset states if done
             if any(done):
@@ -112,11 +112,11 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', default='algo_design', type=str)
-    #parser.add_argument('--env', default='simple', type=str)
+    #parser.add_argument('--env', default='simple_tag_guided', type=str)
+    parser.add_argument('--env', default='simple', type=str)
     parser.add_argument('--learning_rate', default=0.001, type=float)
-    parser.add_argument('--episodes', default=2000, type=int)
-    parser.add_argument('--render', default=True, action="store_true")
+    parser.add_argument('--episodes', default=500000, type=int)
+    parser.add_argument('--render', default=False, action="store_true")
     parser.add_argument('--benchmark', default=False, action="store_true")
     parser.add_argument('--experiment_prefix', default=".",
                         help="directory to store all experiment data")
@@ -130,7 +130,7 @@ if __name__ == '__main__':
                         help="reduces exploration substantially")
     parser.add_argument('--random_seed', default=2, type=int)
     parser.add_argument('--memory_size', default=10000, type=int)
-    parser.add_argument('--batch_size', default=10, type=int)
+    parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--epsilon_greedy', nargs='+', type=float,
                         help="Epsilon greedy parameter for each agent")
     args = parser.parse_args()
@@ -139,43 +139,3 @@ if __name__ == '__main__':
                                         args.experiment_prefix + "/save/run_parameters.json")
     # init env
     env = make_env(args.env, args.benchmark)
-
-    if args.epsilon_greedy is not None:
-        if len(args.epsilon_greedy) == env.n:
-            epsilon_greedy = args.epsilon_greedy
-        else:
-            raise ValueError("Must have enough epsilon_greedy for all agents")
-    else:
-        epsilon_greedy = [0.5 for i in range(env.n)]
-
-    # set random seed
-    env.seed(args.random_seed)
-    random.seed(args.random_seed)
-    np.random.seed(args.random_seed)
-    tf.set_random_seed(args.random_seed)
-
-    # init DQNs
-    n_actions = [env.action_space[i].n for i in range(env.n)]
-    state_sizes = [env.observation_space[i].shape[0] for i in range(env.n)]
-    memories = [Memory(args.memory_size) for i in range(env.n)]
-    dqns = [DQN(n_actions[i], state_sizes[i], eps_greedy=epsilon_greedy[i])
-            for i in range(env.n)]
-
-    #general_utilities.load_dqn_weights_if_exist(
-    #    dqns, args.experiment_prefix + args.weights_filename_prefix)
-
-    start_time = time.time()
-
-    # play
-    statistics = play(args.episodes, args.render, args.testing,
-                      args.checkpoint_frequency,
-                      args.experiment_prefix + args.weights_filename_prefix,
-                      args.experiment_prefix + args.csv_filename_prefix,
-                      args.batch_size)
-
-    # bookkeeping
-    print("Finished {} episodes in {} seconds".format(args.episodes,
-                                                      time.time() - start_time))
-    general_utilities.save_dqn_weights(
-        dqns, args.experiment_prefix + args.weights_filename_prefix)
-    statistics.dump(args.experiment_prefix + args.csv_filename_prefix + ".csv")
