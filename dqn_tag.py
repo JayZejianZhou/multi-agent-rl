@@ -12,6 +12,7 @@ import random
 from dqn import DQN
 from memory import Memory
 from make_env import make_env
+from nn import NN
 import general_utilities
 import new_alg_utilities
 

@@ -10,6 +10,7 @@ import code
 import random
 
 from dqn_hybrid import DQN
+from nn import NN
 from memory import Memory
 from make_env import make_env
 import general_utilities
@@ -21,11 +22,14 @@ import to5
 
 #zejian's variables
 cooperative=False
+#store traning set for a2's actions
+a2memory=np.zeros((1,13))
 
 
 def play(episodes, is_render, is_testing, checkpoint_interval,
          weights_filename_prefix, csv_filename_prefix, batch_size):
     global cooperative
+    global a2memory
     # init statistics. NOTE: simple tag specific!
     statistics_header = ["episode"]
     statistics_header.append("steps")
@@ -158,9 +162,21 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
                 actions[1]=4
                 
             actions=actions.astype(int)
-            action2=2;
-            actions[1]=action2;
-            action=to5.to_five(actions[0],actions[1])
+            #action2=steps%5;
+            #actions[1]=action2;
+            #action=to5.to_five(actions[0],actions[1])
+            
+            
+            #store the real actions of a2 to train
+            training_set=np.append(states[0],[actions[0],steps,actions[1]])
+            a2memory=np.vstack((a2memory,training_set))
+            if len(a2memory)>10000:
+                a2memory=np.delete(a2memory, 0, 0)
+            if a2memory[0][11]==0:
+                a2memory=np.delete(a2memory, 0, 0)              
+
+            
+
             
             onehot_action = np.zeros(n_actions)
             onehot_action[actions[0]] = 0.3
@@ -171,6 +187,7 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
             actions_onehot.append(onehot_action)            
             
 
+            
 
             # step
             states_next, rewards, done, info = env.step(actions_onehot)
@@ -185,8 +202,8 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
                 cooperative=True
             else:
                 cooperative=False
-            #print(cooperative)
-            #cooperative=False
+            print(cooperative)
+            #cooperative=True
             
             reward_cal=rewards[0]+rewards[1];
 
@@ -197,6 +214,7 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
                     range(size), batch_size)
                 
                 done_cal=np.logical_and(done[0],done[1])
+                actions[1]=int(round((a2.network.predict(a2memory[:,0:12]))[0][0]))
                 memories.remember(states[0], action,
                                      reward_cal, states_next[0], done_cal)
                 memories2.remember(states[0], actions[0],
@@ -230,7 +248,8 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
                 if episode % 25 == 0:
                     print(statistics.summarize_last())
                 break
-
+        #train 
+        a2.learn(a2memory[:,0:12],a2memory[:,12])
         if episode % checkpoint_interval == 0:
             statistics.dump("{}_{}.csv".format(csv_filename_prefix,
                                                episode))
@@ -299,6 +318,8 @@ if __name__ == '__main__':
     dqns.append( DQN(n_actions*n_actions, state_sizes, eps_greedy=epsilon_greedy[0]))
     #DQN for independent learner
     dqns.append( DQN(n_actions, state_sizes, eps_greedy=epsilon_greedy[0]))
+    #create the NN for predicting agent2's action, the inputs are player 1 action (1) states (10) step (1), output is player 2's action
+    a2=NN(12,1)
     
     #general_utilities.load_dqn_weights_if_exist(
     #    dqns, args.experiment_prefix + args.weights_filename_prefix)
