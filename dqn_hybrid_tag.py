@@ -9,15 +9,23 @@ import pickle
 import code
 import random
 
-from dqn import DQN
+from dqn_hybrid import DQN
 from memory import Memory
 from make_env import make_env
 import general_utilities
 import new_alg_utilities
 
+import to5
+
+
+
+#zejian's variables
+cooperative=False
+
 
 def play(episodes, is_render, is_testing, checkpoint_interval,
          weights_filename_prefix, csv_filename_prefix, batch_size):
+    global cooperative
     # init statistics. NOTE: simple tag specific!
     statistics_header = ["episode"]
     statistics_header.append("steps")
@@ -46,8 +54,26 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
             # act
             actions = np.zeros(env.n)
             actions_onehot = []
-            #the action is selected by the JAL deep Q network
-            action = dqns[0].choose_action(states[0])
+            q_value_split=np.zeros((env.action_space[0].n,env.action_space[0].n))
+            q_value_together=dqns[0].eval_network.predict(states[0][np.newaxis, :])
+            for i in range(env.action_space[0].n):
+                for j in range(env.action_space[0].n):
+                    q_value_split[i][j]=q_value_together[0][to5.to_five(i,j)]
+            if cooperative:          #TODO: stochastic cooperative index?
+                #the action is selected by the JAL deep Q network
+                action = dqns[0].choose_action(states[0])
+                action_junk = dqns[1].choose_action(states[0])
+            else:
+                #player 2 is noncooperative, now minimax him
+                minned=[]
+                minned_act=[]
+                for i in range(env.action_space[0].n):
+                    minned.append(np.min(q_value_split[i]))
+                    minned_act.append(np.argmin(q_value_split[i]))
+                action1=np.argmin(minned)
+                action2_star=minned_act[action1]
+                action=to5.to_five(action1,action2_star)
+                
             speed = 0.9 
             
             #distribute actions to two players
@@ -132,13 +158,35 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
                 actions[1]=4
                 
             actions=actions.astype(int)
-            for i in range(env.n):
-                onehot_action = np.zeros(n_actions)
-                onehot_action[actions[i]] = speed
-                actions_onehot.append(onehot_action)
+            action2=2;
+            actions[1]=action2;
+            action=to5.to_five(actions[0],actions[1])
+            
+            onehot_action = np.zeros(n_actions)
+            onehot_action[actions[0]] = 0.3
+            actions_onehot.append(onehot_action)
+            
+            onehot_action = np.zeros(n_actions)
+            onehot_action[actions[1]] = 0.1
+            actions_onehot.append(onehot_action)            
+            
+
 
             # step
             states_next, rewards, done, info = env.step(actions_onehot)
+            #observe real action 2 TODO: find a real action 2 to observe
+
+            
+            #update cooperative index
+            q_value=dqns[0].eval_network.predict(states[0][np.newaxis, :])
+            real=q_value[0][to5.to_five(actions[0],actions[1])]
+            estimate=dqns[1].eval_network.predict(states[0][np.newaxis, :])[0][actions[0]]
+            if real> estimate:
+                cooperative=True
+            else:
+                cooperative=False
+            #print(cooperative)
+            #cooperative=False
             
             reward_cal=rewards[0]+rewards[1];
 
@@ -155,7 +203,7 @@ def play(episodes, is_render, is_testing, checkpoint_interval,
                                      reward_cal, states_next[0], done_cal)
 
                 if memories.pointer > batch_size * 10:
-                    history = dqns[0].learn(*memories.sample(batch))
+                    history = dqns[0].learn(*memories.sample(batch),cooperative)
                     dqns[1].learn (*memories2.sample(batch))
                     episode_losses[0] += history.history["loss"][0]
                 else:
@@ -215,7 +263,7 @@ if __name__ == '__main__':
                         help="reduces exploration substantially")
     parser.add_argument('--random_seed', default=2, type=int)
     parser.add_argument('--memory_size', default=10000, type=int)
-    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--batch_size', default=10, type=int)
     parser.add_argument('--epsilon_greedy', nargs='+', type=float,
                         help="Epsilon greedy parameter for each agent")
     args = parser.parse_args()

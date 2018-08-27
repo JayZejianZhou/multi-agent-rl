@@ -17,7 +17,7 @@ class Scenario(BaseScenario):
             agent.name = 'agent %d' % i
             agent.collide = True
             agent.silent = True
-            agent.size = 0.2
+            agent.size = 0.1
         # add landmarks
         world.landmarks = [Landmark() for i in range(num_landmarks)]
         for i, landmark in enumerate(world.landmarks):
@@ -73,15 +73,17 @@ class Scenario(BaseScenario):
         # Agents are rewarded based on minimum agent distance to each landmark, penalized for collisions
         rew = 0
         for l in world.landmarks:
-            dists = [np.sqrt(np.sum(np.square(a.state.p_pos - l.state.p_pos))) for a in world.agents]
+            #dists = [np.sqrt(np.sum(np.square(a.state.p_pos - l.state.p_pos))) for a in world.agents]
+            dists = [np.sqrt(np.sum(np.square(agent.state.p_pos - l.state.p_pos)))]
             rew -= min(dists)
         if agent.collide:
             for a in world.agents:
                 if self.is_collision(a, agent):
-                    rew -= 10
+                    rew -= 5
         #if hit the wall, end
         for p in range(world.dim_p):
             x = abs(agent.state.p_pos[p])
+            
             if (x > 1.0):
                 rew-=50
 
@@ -108,13 +110,15 @@ class Scenario(BaseScenario):
     def done(self, agent, world):
         #if touch the target, end
         for l in world.landmarks:
-            dists = [np.sqrt(np.sum(np.square(a.state.p_pos - l.state.p_pos))) for a in world.agents]
-            if min(dists)<0.5:
+            #dists = [np.sqrt(np.sum(np.square(a.state.p_pos - l.state.p_pos))) for a in world.agents]
+            dists = [np.sqrt(np.sum(np.square(agent.state.p_pos - l.state.p_pos)))]
+            if min(dists)<0.2:
+                print('finished')
                 return True
-        #if hit the wall, end
         for p in range(world.dim_p):
             x = abs(agent.state.p_pos[p])
             if (x > 1.0):
+                print('not finished')
                 return True
 
         return False
